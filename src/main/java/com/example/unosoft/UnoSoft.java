@@ -3,109 +3,113 @@ package com.example.unosoft;
 
 import java.io.*;
 import java.util.*;
+import java.util.stream.Collectors;
 
 public class UnoSoft {
+    static List<Line> lines = new ArrayList<>(1000000);
 
-    private static final Map<String, Integer> stringLineNumber = new HashMap<>();
-    private static final List<String> intersectingLines = new ArrayList<>();
+    static Map<Float, Map<Integer, List<Line>>> valueToRowToLines = new HashMap<>(1000000);
+    static Map<Integer, ResultGroup> result = new HashMap<>(1000000);
 
-    public static void main(String[] args) {
-        long start = System.nanoTime();
-
+    public static void main(String[] args) throws InterruptedException {
+        var start = System.currentTimeMillis();
         readFile();
+        makeRows();
+        List<ResultGroup> answer = result.values().stream()
+                .filter(e -> e.lines.size() != 1)
+                .sorted(Comparator.comparingInt(e -> -e.lines.size()))
+                .collect(Collectors.toList());
 
-        Set<Integer> numbersOfIntersectingLines = getNumbersOfIntersectingLines();
+        writeFile(answer);
 
-        for (Map.Entry<String, Integer> entry : stringLineNumber.entrySet()) {
-            if (numbersOfIntersectingLines.contains(entry.getValue())) {
-                intersectingLines.add(entry.getKey());
-            }
-        }
+        var end = System.currentTimeMillis();
+        System.out.println(answer.size());
+        System.out.println((end - start));
+    }
 
-        writeFile(getResultGroups());
 
-        long finish = System.nanoTime();
-        double time = (finish - start) / 1e9;
-        System.out.printf("Time : %.3f sec", time);
+    private static void makeRows() {
+        lines.forEach(line -> {
+                    int currentLineGroup = line.currentGroup;
+                    for (int row = 0; row < line.content.length; row++) {
+                        float value = line.content[row];
+                        if (value == 0) continue;
 
+                        Map<Integer, List<Line>> rowToLines;
+
+                        if (valueToRowToLines.containsKey(value)) { //если такое число есть то
+
+                            rowToLines = valueToRowToLines.get(value);
+                            if (rowToLines.containsKey(row)) { // если такая колонка есть то
+
+                                List<Line> groupedLines = rowToLines.get(row);
+                                int groupOfGroupedLines = groupedLines.get(0).currentGroup;
+
+                                if (groupOfGroupedLines == currentLineGroup) {
+                                    continue;
+                                }
+
+                                ResultGroup oldGroup = result.remove(currentLineGroup);// возможно линия была раньше добавлена в группу
+                                if (oldGroup == null) {
+                                    result.get(groupOfGroupedLines).add(line);
+                                } else {
+                                    result.get(groupOfGroupedLines).addAll(oldGroup);
+                                }
+                                groupedLines.add(line);
+
+                            } else {// если такой  колонки нет то
+
+                                rowToLines.computeIfAbsent(row, k -> new ArrayList<>())
+                                        .add(line);
+
+                                result.computeIfAbsent(currentLineGroup, k -> new ResultGroup(line.currentGroup))
+                                        .add(line); // может добавить саму себя, если ранее была уже добавлена
+                            }
+
+
+                        } else { // если такого числа еще нет
+                            valueToRowToLines.computeIfAbsent(value, k -> new HashMap<>())
+                                    .computeIfAbsent(row, k -> new ArrayList<>())
+                                    .add(line);
+
+                            result.computeIfAbsent(currentLineGroup, k -> new ResultGroup(line.currentGroup))
+                                    .add(line);
+                        }
+
+                        currentLineGroup = line.currentGroup;
+                    }
+                }
+        );
     }
 
     private static void readFile() {
-        int lineCount = 1;
-        try (BufferedReader br = new BufferedReader(new FileReader("lng.txt"))) {
-            String readLine;
-            while ((readLine = br.readLine()) != null) {
-                stringLineNumber.put(readLine, lineCount++);
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-    }
-
-    private static Set<Integer> getNumbersOfIntersectingLines() {
-        Set<OneSlotAndLine> oneSlotAndLines = new HashSet<>();
-        Map<OneSlot, Integer> oneSlotToRepeats = new HashMap<>();
-
-        for (Map.Entry<String, Integer> entry : stringLineNumber.entrySet()) {
-            if (!isValidLine(entry.getKey())) {
-                continue;
-            }
-
-            String[] array = entry.getKey().split(";");
-            for (int j = 0; j < array.length; j++) {
-                String numberAsString = array[j].substring(1, array[j].length() - 1);
-                long number = numberAsString.isEmpty() ? 0 : Long.parseLong(numberAsString);
-
-                OneSlot oneSlot = new OneSlot(number, j);
-                OneSlotAndLine oneSlotAndLine = new OneSlotAndLine(oneSlot, entry.getValue());
-
-                oneSlotToRepeats.put(oneSlot, oneSlotToRepeats.getOrDefault(oneSlot, 0) + 1);
-                oneSlotAndLines.add(oneSlotAndLine);
-            }
-        }
-        Set<Integer> returnSet = new HashSet<>();
-        oneSlotAndLines.forEach(OneSlotAndLine -> {
-            OneSlot key = OneSlotAndLine.oneSlot();
-            Integer orDefault = oneSlotToRepeats.getOrDefault(key, 0);
-            if (orDefault > 1 && OneSlotAndLine.oneSlot().number() != 0) {
-                returnSet.add(OneSlotAndLine.line());
-            }
-
-        });
-        return returnSet;
-    }
-
-    private static List<List<String>> getResultGroups() {
-
-        List<List<String>> resultGroups = new ArrayList<>();
-
-        while (intersectingLines.size() != 0) {
-            List<String> listElements = new ArrayList<>();
-            listElements.add(intersectingLines.get(0));
-            for (int j = 1; j < intersectingLines.size(); j++) {
-                if (isCoincidedLineAndSet(intersectingLines.get(j), listElements)) {
-                    listElements.add(intersectingLines.get(j));
-                    intersectingLines.remove(j);
-                    j = 0;
+        try (BufferedReader br = new BufferedReader(new FileReader("lng-big.csv"))) {
+            String rawLine;
+            while ((rawLine = br.readLine()) != null) {
+                String[] line = rawLine.split(";");
+                float[] split = new float[line.length];
+                try {
+                    for (int i = 0; i < split.length; i++) {
+                        split[i] = convertString(line[i]);
+                    }
+                    lines.add(new Line(split, rawLine.hashCode()));
+                } catch (Exception i) {
+                    i.printStackTrace();
                 }
             }
-            intersectingLines.remove(0);
-
-            resultGroups.add(listElements);
+        } catch (Exception i) {
+            i.printStackTrace();
         }
-
-        resultGroups.sort((l1, l2) -> Integer.compare(l2.size(), l1.size()));
-        return resultGroups;
     }
 
-    private static void writeFile(List<List<String>> resultGroups) {
+    private static void writeFile(List<ResultGroup> resultGroups) {
         try (BufferedWriter writer = new BufferedWriter(new FileWriter("answer.txt"))) {
             writer.write("Number of groups with more than one element: " + resultGroups.size() + "\n\n");
             for (int i = 0; i < resultGroups.size(); i++) {
                 writer.write("Group " + (i + 1) + "\n");
-                List<String> group = resultGroups.get(i);
-                for (String line : group) {
-                    writer.write(line+"\n");
+                ResultGroup group = resultGroups.get(i);
+                for (Line line : group.lines) {
+                    writer.write(Arrays.toString(line.content) + "\n");
                 }
                 writer.newLine();
             }
@@ -115,43 +119,68 @@ public class UnoSoft {
         }
     }
 
-    private static boolean isValidLine(String str) {
-        boolean inside = false;
-        for (int i = 0; i < str.length(); i++) {
-            char c = str.charAt(i);
-
-            if (c == '"') {
-                inside = !inside;
-            } else if (!inside && c != ';' && c != ' ') {
-                if (!Character.isDigit(c)) {
-                    return false;
-                }
-            }
-        }
-        return true;
+    private static Float convertString(String value) {
+        return value.isBlank() ? 0 : Float.parseFloat(value.substring(1, value.length() - 1));
     }
 
-    private static boolean isCoincidedLineAndSet(String str, List<String> list) {
-        for (String string : list) {
-            if (isCoincidedLines(str, string)) {
-                return true;
-            }
-        }
-        return false;
+}
+
+class ResultGroup implements Comparable<ResultGroup> {
+
+    final int group;
+    Set<Line> lines = new HashSet<>(1);
+
+    ResultGroup(int group) {
+        this.group = group;
     }
 
-    private static boolean isCoincidedLines(String str1, String str2) {
-        String[] array1 = str1.split(";");
-        String[] array2 = str2.split(";");
 
-        for (int i = 0; i < array1.length && i < array2.length; i++) {
-            if (!array1[i].equals("\"\"") && array1[i].equals(array2[i])) {
-                return true;
-            }
-        }
-        return false;
+    void addAll(ResultGroup resultGroup) {
+        if (group == resultGroup.group) return;  //чтобы не удалить самого себя
+        resultGroup.lines.forEach(this::add);
+        resultGroup.lines.clear();
     }
 
+
+    void add(Line line) {
+        line.moveTo(group);
+        lines.add(line);
+    }
+
+    @Override
+    public int compareTo(ResultGroup o) {
+        return Integer.compare(this.lines.size(), o.lines.size());
+    }
+}
+
+
+class Line {
+    static int lastGroup = 1;
+    final float[] content;
+    private final int hashCode;
+    int currentGroup = lastGroup++;
+
+    public Line(float[] split, int hashCode) {
+        content = split;
+        this.hashCode = hashCode;
+    }
+
+    void moveTo(int group) {
+        currentGroup = group;
+    }
+
+    @Override
+    public int hashCode() {
+        return hashCode;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (!(o instanceof Line)) return false;
+        Line line = (Line) o;
+        return hashCode == line.hashCode;
+    }
 }
 
 
