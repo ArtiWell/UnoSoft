@@ -2,20 +2,22 @@ package com.example.unosoft;
 
 
 import java.io.*;
-import java.net.URI;
 import java.util.*;
 import java.util.stream.Collectors;
-import java.util.zip.GZIPInputStream;
 
 public class UnoSoft {
     static List<Line> lines = new ArrayList<>(1000000);
-
     static Map<Double, Map<Integer, List<Line>>> valueToRowToLines = new HashMap<>(1000000);
     static Map<Integer, ResultGroup> result = new HashMap<>(1000000);
 
+
     public static void main(String[] args) throws InterruptedException {
+        if (args.length!=1){
+            System.exit(1);
+        }
+        String way = args[0];
         var start = System.currentTimeMillis();
-        readFile();
+        readFile(way);
         makeRows();
         List<ResultGroup> answer = result.values().stream()
                 .filter(e -> e.lines.size() != 1)
@@ -84,12 +86,8 @@ public class UnoSoft {
         );
     }
 
-    private static void readFile() {
-        try (BufferedReader br = new BufferedReader(
-                new InputStreamReader(
-                        new GZIPInputStream(
-                                new URI("https://github.com/PeacockTeam/new-job/releases/download/v1.0/lng-4.txt.gz")
-                                        .toURL().openStream())))) {
+    private static void readFile(String way) {
+        try (BufferedReader br = new BufferedReader(new FileReader(way))) {
             String rawLine;
             while ((rawLine = br.readLine()) != null) {
                 String[] line = rawLine.split(";");
