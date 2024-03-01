@@ -2,13 +2,15 @@ package com.example.unosoft;
 
 
 import java.io.*;
+import java.net.URI;
 import java.util.*;
 import java.util.stream.Collectors;
+import java.util.zip.GZIPInputStream;
 
 public class UnoSoft {
     static List<Line> lines = new ArrayList<>(1000000);
 
-    static Map<Float, Map<Integer, List<Line>>> valueToRowToLines = new HashMap<>(1000000);
+    static Map<Double, Map<Integer, List<Line>>> valueToRowToLines = new HashMap<>(1000000);
     static Map<Integer, ResultGroup> result = new HashMap<>(1000000);
 
     public static void main(String[] args) throws InterruptedException {
@@ -32,7 +34,7 @@ public class UnoSoft {
         lines.forEach(line -> {
                     int currentLineGroup = line.currentGroup;
                     for (int row = 0; row < line.content.length; row++) {
-                        float value = line.content[row];
+                        double value = line.content[row];
                         if (value == 0) continue;
 
                         Map<Integer, List<Line>> rowToLines;
@@ -83,11 +85,15 @@ public class UnoSoft {
     }
 
     private static void readFile() {
-        try (BufferedReader br = new BufferedReader(new FileReader("lng-big.csv"))) {
+        try (BufferedReader br = new BufferedReader(
+                new InputStreamReader(
+                        new GZIPInputStream(
+                                new URI("https://github.com/PeacockTeam/new-job/releases/download/v1.0/lng-4.txt.gz")
+                                        .toURL().openStream())))) {
             String rawLine;
             while ((rawLine = br.readLine()) != null) {
                 String[] line = rawLine.split(";");
-                float[] split = new float[line.length];
+                double[] split = new double[line.length];
                 try {
                     for (int i = 0; i < split.length; i++) {
                         split[i] = convertString(line[i]);
@@ -119,8 +125,8 @@ public class UnoSoft {
         }
     }
 
-    private static Float convertString(String value) {
-        return value.isBlank() ? 0 : Float.parseFloat(value.substring(1, value.length() - 1));
+    private static Double convertString(String value) {
+        return value.isBlank() || value.equals("\"\"") ? 0 : Double.parseDouble(value.substring(1, value.length() - 1));
     }
 
 }
@@ -156,11 +162,11 @@ class ResultGroup implements Comparable<ResultGroup> {
 
 class Line {
     static int lastGroup = 1;
-    final float[] content;
+    final double[] content;
     private final int hashCode;
     int currentGroup = lastGroup++;
 
-    public Line(float[] split, int hashCode) {
+    public Line(double[] split, int hashCode) {
         content = split;
         this.hashCode = hashCode;
     }
@@ -177,8 +183,7 @@ class Line {
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
-        if (!(o instanceof Line)) return false;
-        Line line = (Line) o;
+        if (!(o instanceof Line line)) return false;
         return hashCode == line.hashCode;
     }
 }
