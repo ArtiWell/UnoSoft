@@ -5,18 +5,16 @@ import java.io.*;
 import java.util.*;
 import java.util.stream.Collectors;
 
-public class UnoSoft {
+public class UnoSoft2 {
     static List<Line> lines = new ArrayList<>(1000000);
     static Map<Double, Map<Integer, List<Line>>> valueToRowToLines = new HashMap<>(1000000);
     static Map<Integer, ResultGroup> result = new HashMap<>(1000000);
 
 
+
     public static void main(String[] args) throws InterruptedException {
-        if (args.length!=1){
-            System.exit(1);
-        }
-        String way = args[0];
         var start = System.currentTimeMillis();
+        String way = args[0];
         readFile(way);
         makeRows();
         List<ResultGroup> answer = result.values().stream()
